@@ -1,17 +1,18 @@
 #!/bin/bash
 
 # Detect the block device dynamically
-block_device=$(lsblk -dpno NAME,TYPE | awk '$2=="disk" && $1!~/nvme[0-9]n1$/ {print $1}')
+busy=$(lsblk | grep part | awk '{ print $1 }' | head -1 | cut -b 7-13)
+free=$(lsblk | grep -v ${busy} | grep -v NAME | awk '{ print $1 }')
 
 # Partition disk
-/usr/sbin/parted --script -a optimal -- ${block_device} mklabel gpt mkpart primary 1MiB -1
+/usr/sbin/parted --script -a optimal -- ${free} mklabel gpt mkpart primary 1MiB -1
 sleep 2
 
 # Create Filesystem
-mkfs.xfs -i size=512 "${block_device}p1"
+mkfs.xfs -i size=512 "${free}p1"
 
 # Add to /etc/fstab, mount filesystem, and create brick subdirectory
-UUID=$(blkid "${block_device}p1" | cut -d \" -f 2)
+UUID=$(blkid "${free}p1" | cut -d \" -f 2)
 echo "UUID=$UUID /gfs xfs rw,inode64,noatime,nouuid 1 2" >> /etc/fstab
 mkdir /gfs
 mount /gfs
